@@ -3,6 +3,7 @@ import http from 'node:http';
 import fs from 'node:fs/promises';
 import child_process from 'node:child_process';
 const exec = promisify(child_process.exec);
+const spawn = child_process.spawn;
 
 const server = http.createServer(async (req, res) => {
   console.log(`${req.method} ${req.url}`);
@@ -21,22 +22,55 @@ const server = http.createServer(async (req, res) => {
         });
         res.end('error:\n' + e);
       }
-    } else if (url.pathname = '/slowmedownload') {
+    } else if (url.pathname == '/slowmedownload') {
       const downloadUrl = url.searchParams.get('url');
+      const speed = url.searchParams.get('speed');
       console.log('downloading url: ' + downloadUrl);
       console.log('running yt-dlp...');
-      const { stdout, stderr } = await exec(
+      let { stdout, stderr } = await exec(
         `yt-dlp -o asdf -x --audio-format mp3 "${downloadUrl}"`);
       console.log('stdout:');
       console.log(stdout);
       console.log('stderr:');
       console.log(stderr);
-      console.log('going to reply with asdf.mp3');
+
+      let filename = 'asdf.mp3';
+
+      console.log('speed: ' + speed);
+      if (speed != 1) {
+        // TODO don't guess sample rate
+        const sampleRate = 44100;
+        const newSampleRate = Math.ceil(speed*sampleRate);
+        console.log('running ffmpeg');
+        const ffProc = spawn('ffmpeg',
+          ['ffmpeg', '-i', 'asdf.mp3', '-af', `asetrate=${newSampleRate},aresample=${sampleRate}`, 'asdf-speed.mp3']);
+        ffProc.stdout.setEncoding('utf8');
+        ffProc.stdout.on('data', function (data) {
+          var str = data.toString()
+          var lines = str.split(/(\r?\n)/g);
+          console.log(lines.join(""));
+        });
+        await new Promise(resolve => {
+          ffProc.on('close', function (code) {
+            console.log('process exit code ' + code);
+            resolve();
+          });
+        });
+        filename = 'asdf-speed.mp3';
+
+        /*let { stdout, stderr } = await exec(ffCommand);
+        console.log('stdout:');
+        console.log(stdout);
+        console.log('stderr:');
+        console.log(stderr);*/
+      }
+
+      console.log('going to reply with ' + filename);
+      const contents = await fs.readFile(filename);
       res.writeHead(200, {
         'content-type': 'audio/mpeg',
         'content-disposition': 'filename=asdf.mp3'
       });
-      const contents = await fs.readFile('asdf.mp3');
       res.end(contents);
     }
   } catch (e) {
