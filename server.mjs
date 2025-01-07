@@ -29,8 +29,8 @@ const server = http.createServer(async (req, res) => {
       console.log('downloading url: ' + downloadUrl);
       console.log('running yt-dlp...');
       const ytArgs = filetype == 'mp3'
-        ? ['-o', 'asdf', '-x', '--audio-format', filetype, downloadUrl]
-        : ['-o', `asdf.${filetype}`, '-f', filetype, downloadUrl];
+        ? ['--force-overwrites', '-o', 'asdf', '-x', '--audio-format', filetype, downloadUrl]
+        : ['--force-overwrites', '-o', `asdf.${filetype}`, '-f', filetype, downloadUrl];
       const ytProc = spawn('yt-dlp', ytArgs);
       ytProc.stdout.setEncoding('utf8');
       ytProc.stdout.on('data', function (data) {
@@ -55,7 +55,7 @@ const server = http.createServer(async (req, res) => {
         console.log('running ffmpeg');
         // TODO make these args also work if theres a video track
         const ffProc = spawn('ffmpeg',
-          ['ffmpeg', '-i', filename, '-af', `asetrate=${newSampleRate},aresample=${sampleRate}`, `asdf-speed.${filetype}`]);
+          ['-y', '-i', filename, '-af', `asetrate=${newSampleRate},aresample=${sampleRate}`, `asdf-speed.${filetype}`]);
         ffProc.stdout.setEncoding('utf8');
         ffProc.stdout.on('data', function (data) {
           var str = data.toString()
@@ -81,7 +81,7 @@ const server = http.createServer(async (req, res) => {
       const contents = await fs.readFile(filename);
       res.writeHead(200, {
         'content-type': 'audio/mpeg',
-        'content-disposition': `filename=asdf.${filetype}`
+        'content-disposition': `filename=${filename}`
       });
       res.end(contents);
     }
