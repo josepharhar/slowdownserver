@@ -25,16 +25,27 @@ const server = http.createServer(async (req, res) => {
     } else if (url.pathname == '/slowmedownload') {
       const downloadUrl = url.searchParams.get('url');
       const speed = url.searchParams.get('speed');
+      const filetype = url.searchParams.get('filetype');
       console.log('downloading url: ' + downloadUrl);
       console.log('running yt-dlp...');
-      let { stdout, stderr } = await exec(
-        `yt-dlp -o asdf -x --audio-format mp3 "${downloadUrl}"`);
-      console.log('stdout:');
-      console.log(stdout);
-      console.log('stderr:');
-      console.log(stderr);
+      const ytArgs = filetype == 'mp3'
+        ? ['-o', 'asdf', '-x', '--audio-format', filetype, downloadUrl]
+        : ['-o', `asdf.${filetype}`, '-f', filetype, downloadUrl];
+      const ytProc = spawn('yt-dlp', ytArgs);
+      ytProc.stdout.setEncoding('utf8');
+      ytProc.stdout.on('data', function (data) {
+        var str = data.toString()
+        var lines = str.split(/(\r?\n)/g);
+        console.log(lines.join(""));
+      });
+      await new Promise(resolve => {
+        ytProc.on('close', function (code) {
+          console.log('process exit code ' + code);
+          resolve();
+        });
+      });
 
-      let filename = 'asdf.mp3';
+      let filename = `asdf.${filetype}`;
 
       console.log('speed: ' + speed);
       if (speed != 1) {
@@ -42,10 +53,17 @@ const server = http.createServer(async (req, res) => {
         const sampleRate = 44100;
         const newSampleRate = Math.ceil(speed*sampleRate);
         console.log('running ffmpeg');
+        // TODO make these args also work if theres a video track
         const ffProc = spawn('ffmpeg',
-          ['ffmpeg', '-i', 'asdf.mp3', '-af', `asetrate=${newSampleRate},aresample=${sampleRate}`, 'asdf-speed.mp3']);
+          ['ffmpeg', '-i', filename, '-af', `asetrate=${newSampleRate},aresample=${sampleRate}`, `asdf-speed.${filetype}`]);
         ffProc.stdout.setEncoding('utf8');
         ffProc.stdout.on('data', function (data) {
+          var str = data.toString()
+          var lines = str.split(/(\r?\n)/g);
+          console.log(lines.join(""));
+        });
+        ffProc.stderr.setEncoding('utf8');
+        ffProc.stderr.on('data', function (data) {
           var str = data.toString()
           var lines = str.split(/(\r?\n)/g);
           console.log(lines.join(""));
@@ -56,20 +74,14 @@ const server = http.createServer(async (req, res) => {
             resolve();
           });
         });
-        filename = 'asdf-speed.mp3';
-
-        /*let { stdout, stderr } = await exec(ffCommand);
-        console.log('stdout:');
-        console.log(stdout);
-        console.log('stderr:');
-        console.log(stderr);*/
+        filename = `asdf-speed.${filetype}`;
       }
 
       console.log('going to reply with ' + filename);
       const contents = await fs.readFile(filename);
       res.writeHead(200, {
         'content-type': 'audio/mpeg',
-        'content-disposition': 'filename=asdf.mp3'
+        'content-disposition': `filename=asdf.${filetype}`
       });
       res.end(contents);
     }
