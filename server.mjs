@@ -54,8 +54,12 @@ const server = http.createServer(async (req, res) => {
         const newSampleRate = Math.ceil(speed*sampleRate);
         console.log('running ffmpeg');
         // TODO make these args also work if theres a video track
-        const ffProc = spawn('ffmpeg',
-          ['-y', '-i', filename, '-af', `asetrate=${newSampleRate},aresample=${sampleRate}`, `asdf-speed.${filetype}`]);
+        const ptsScale = 1 / speed;
+        console.log(ptsScale);
+        const ffArgs = filetype == 'mp3'
+          ? ['-y', '-i', filename, '-af', `asetrate=${newSampleRate},aresample=${sampleRate}`, `asdf-speed.${filetype}`]
+          : ['-y', '-i', filename, '-vf', `setpts=${ptsScale}*PTS`, '-af', `asetrate=${newSampleRate},aresample=${sampleRate}`, `asdf-speed.${filetype}`];
+        const ffProc = spawn('ffmpeg', ffArgs);
         ffProc.stdout.setEncoding('utf8');
         ffProc.stdout.on('data', function (data) {
           var str = data.toString()
