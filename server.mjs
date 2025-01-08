@@ -8,6 +8,27 @@ const spawn = child_process.spawn;
 const server = http.createServer(async (req, res) => {
   console.log(`${req.method} ${req.url}`);
   try {
+		const header = req.headers.authorization || '';       // get the auth header
+		const token = header.split(/\s+/).pop() || '';        // and the encoded auth token
+		const auth = Buffer.from(token, 'base64').toString(); // convert from base64
+		const parts = auth.split(/:/);                        // split on colon
+		const username = parts.shift();                       // username is first
+		const password = parts.join(':');                     // everything else is the password
+
+    const secret = (await fs.readFile('secret', {encoding: 'utf-8'})).trim();
+    console.log('username: ' + username);
+		console.log('password: ' + password);
+    console.log('secret: ' + secret);
+
+    if (username != secret) {
+      console.log('rejecting, bad password');
+      res.writeHead(401, {
+        'www-authenticate': 'Basic realm="Dev", charset="UTF-8"'
+      });
+      res.end('whats the password');
+      return;
+    }
+
     const url = new URL(`http://${process.env.HOST ?? 'localhost'}${req.url}`); 
     if (url.pathname == '/slowmedown') {
       try {
@@ -16,11 +37,13 @@ const server = http.createServer(async (req, res) => {
           'content-type': 'text/html'
         });
         res.end(contents);
+        return;
       } catch (e) {
         res.writeHead(500, {
           'content-type': 'text/plain'
         });
         res.end('error:\n' + e);
+        return;
       }
     } else if (url.pathname == '/slowmedownload') {
       const downloadUrl = url.searchParams.get('url');
@@ -88,10 +111,13 @@ const server = http.createServer(async (req, res) => {
         'content-disposition': `filename=${filename}`
       });
       res.end(contents);
+      return;
     }
   } catch (e) {
+    console.log('error: ' + e.toString());
     res.writeHead(500, {'content-type': 'text/plain'});
     res.end('error: ' + e.toString());
+    return;
   }
 });
 
