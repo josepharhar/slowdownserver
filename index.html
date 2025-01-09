@@ -13,8 +13,19 @@
 </select>
 <br>
 <button>download</button>
+<div id=serveroutput></div>
 
 <script>
+const websocket = new WebSocket('/slowmedownsocket');
+let websocketId = null;
+websocket.addEventListener('message', event => {
+  if (!websocketId) {
+    console.log('assigning websocketId of ' + event.data, event);
+    websocketId = event.data;
+  }
+  document.getElementById('serveroutput').appendChild(new Text(event.data));
+});
+
 const button = document.querySelector('button');
 button.onclick = async () => {
   const url = document.getElementById('url').value;
@@ -22,7 +33,8 @@ button.onclick = async () => {
   const filetype = document.getElementById('filetype').value;
   const options = {
     headers: {
-      accept: '*/*'
+      accept: '*/*',
+      'x-websocket-id': websocketId
     }
   };
   const response = await fetch(
@@ -30,5 +42,20 @@ button.onclick = async () => {
   const blob = await response.blob();
   const file = window.URL.createObjectURL(blob);
   window.location.assign(file);
+  // TODO try doing this instead of navigating to the file:
+  /*const a = document.createElement('a');
+  a.href = file;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();*/
 };
 </script>
+
+<style>
+#serveroutput {
+  height: 200px;
+  overflow-y: scroll;
+  white-space: pre;
+  font-family: monospace;
+}
+</style>

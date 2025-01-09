@@ -2,12 +2,22 @@ import {promisify} from 'node:util';
 import http from 'node:http';
 import fs from 'node:fs/promises';
 import child_process from 'node:child_process';
-const exec = promisify(child_process.exec);
+import WebsocketLib from 'websocket';
+const WebsocketServer = WebsocketLib.server;
+const WebsocketRouter = WebsocketLib.router;
 const spawn = child_process.spawn;
+
+// TODO add log file
+// TODO add websocket for frontend to see subprocess output
+const websocketMap = new Map();
 
 const server = http.createServer(async (req, res) => {
   console.log(`${req.method} ${req.url}`);
   try {
+    const websocketHeader = req.headers['x-websocket-id'];
+    const websocket = websocketMap.get(String(websocketHeader));
+    console.log('websocketHeader: ' + websocketHeader + ', websocket: ' + websocket);
+
 		const header = req.headers.authorization || '';       // get the auth header
 		const token = header.split(/\s+/).pop() || '';        // and the encoded auth token
 		const auth = Buffer.from(token, 'base64').toString(); // convert from base64
@@ -56,9 +66,21 @@ const server = http.createServer(async (req, res) => {
         : ['--force-overwrites', '-o', `asdf.${filetype}`, '-f', filetype, downloadUrl];
       const ytProc = spawn('yt-dlp', ytArgs);
       ytProc.stdout.setEncoding('utf8');
-      ytProc.stdout.on('data', function (data) {
-        var str = data.toString()
-        var lines = str.split(/(\r?\n)/g);
+      ytProc.stdout.on('data', data => {
+        const str = data.toString();
+        if (websocket) {
+          websocket.sendUTF(str);
+        }
+        const lines = str.split(/(\r?\n)/g);
+        console.log(lines.join(""));
+      });
+      ytProc.stderr.setEncoding('utf8');
+      ytProc.stderr.on('data', data => {
+        const str = data.toString();
+        if (websocket) {
+          websocket.sendUTF(str);
+        }
+        const lines = str.split(/(\r?\n)/g);
         console.log(lines.join(""));
       });
       await new Promise(resolve => {
@@ -85,14 +107,20 @@ const server = http.createServer(async (req, res) => {
         const ffProc = spawn('ffmpeg', ffArgs);
         ffProc.stdout.setEncoding('utf8');
         ffProc.stdout.on('data', function (data) {
-          var str = data.toString()
-          var lines = str.split(/(\r?\n)/g);
+          const str = data.toString();
+          if (websocket) {
+            websocket.sendUTF(str);
+          }
+          const lines = str.split(/(\r?\n)/g);
           console.log(lines.join(""));
         });
         ffProc.stderr.setEncoding('utf8');
         ffProc.stderr.on('data', function (data) {
-          var str = data.toString()
-          var lines = str.split(/(\r?\n)/g);
+          const str = data.toString();
+          if (websocket) {
+            websocket.sendUTF(str);
+          }
+          const lines = str.split(/(\r?\n)/g);
           console.log(lines.join(""));
         });
         await new Promise(resolve => {
@@ -121,5 +149,29 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-// TODO add port command line argument
-server.listen(48880);
+const websocketServer = new WebsocketServer({
+  httpServer: server,
+  autoAcceptConnections: false
+});
+
+const websocketRouter = new WebsocketRouter();
+websocketRouter.attachServer(websocketServer);
+
+let nextWebsocketId = 1;
+
+websocketRouter.mount('/slowmedownsocket', null, request => {
+  // TODO check password and request.reject() if its not good?
+  const websocket = request.accept();
+  const websocketId = nextWebsocketId++;
+  console.log('created websocket with id: ' + websocketId);
+  websocketMap.set(String(websocketId), websocket);
+  websocket.on('close', (reasonCode, description) => {
+    console.log('closed websocket with id: ' + websocketId
+      + ', reasonCode: ' + reasonCode
+      + ', description: ' + description);
+    websocketMap.delete(websocketId);
+  });
+  websocket.sendUTF(websocketId);
+});
+
+server.listen(process.env.PORT || 48880);
