@@ -22,8 +22,9 @@ websocket.addEventListener('message', event => {
   if (!websocketId) {
     console.log('assigning websocketId of ' + event.data, event);
     websocketId = event.data;
+  } else {
+    document.getElementById('serveroutput').appendChild(new Text(event.data));
   }
-  document.getElementById('serveroutput').appendChild(new Text(event.data));
 });
 
 const button = document.querySelector('button');
@@ -41,13 +42,12 @@ button.onclick = async () => {
     '/slowmedownload?' + new URLSearchParams({url, speed, filetype}).toString(), options);
   const blob = await response.blob();
   const file = window.URL.createObjectURL(blob);
-  window.location.assign(file);
-  // TODO try doing this instead of navigating to the file:
-  /*const a = document.createElement('a');
+  const a = document.createElement('a');
   a.href = file;
+  a.download = 'asdf';
   document.body.appendChild(a);
   a.click();
-  a.remove();*/
+  a.remove();
 };
 </script>
 

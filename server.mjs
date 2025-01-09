@@ -18,16 +18,16 @@ const server = http.createServer(async (req, res) => {
     const websocket = websocketMap.get(String(websocketHeader));
     console.log('websocketHeader: ' + websocketHeader + ', websocket: ' + websocket);
 
-		const header = req.headers.authorization || '';       // get the auth header
-		const token = header.split(/\s+/).pop() || '';        // and the encoded auth token
-		const auth = Buffer.from(token, 'base64').toString(); // convert from base64
-		const parts = auth.split(/:/);                        // split on colon
-		const username = parts.shift();                       // username is first
-		const password = parts.join(':');                     // everything else is the password
+    const header = req.headers.authorization || '';       // get the auth header
+    const token = header.split(/\s+/).pop() || '';        // and the encoded auth token
+    const auth = Buffer.from(token, 'base64').toString(); // convert from base64
+    const parts = auth.split(/:/);                        // split on colon
+    const username = parts.shift();                       // username is first
+    const password = parts.join(':');                     // everything else is the password
 
     const secret = (await fs.readFile('secret', {encoding: 'utf-8'})).trim();
     console.log('username: ' + username);
-		console.log('password: ' + password);
+    console.log('password: ' + password);
     console.log('secret: ' + secret);
 
     if (username != secret) {
