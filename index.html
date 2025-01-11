@@ -13,7 +13,7 @@
 </select>
 <br>
 <button>download</button>
-<div id=serveroutput></div>
+<div id=serveroutput><div id=serveroutputcontent></div><div id=serveroutputanchor></div></div>
 
 <script>
 const websocket = new WebSocket('/slowmedownsocket');
@@ -23,8 +23,13 @@ websocket.addEventListener('message', event => {
     console.log('assigning websocketId of ' + event.data, event);
     websocketId = event.data;
   } else {
-    const text = String(event.data).replace('\r\n', '\n').replace('\r', '\n');
-    document.getElementById('serveroutput').appendChild(new Text(event.data));
+    //const text = String(event.data).replace('\r\n', '\n').replace('\r', '\n');
+    let text = String(event.data);
+    if (!text.endsWith('\n')) {
+      text += '\n';
+    }
+    document.getElementById('serveroutputcontent').appendChild(new Text(event.data));
+    document.getElementById('serveroutputanchor').scrollIntoView();
   }
 });
 
@@ -56,7 +61,16 @@ button.onclick = async () => {
 #serveroutput {
   height: 200px;
   overflow-y: scroll;
-  white-space: pre;
+  white-space: pre-wrap;
   font-family: monospace;
+  border: 1px solid black;
+  text-wrap: wrap;
+}
+/*#serveroutputcontent {
+  overflow-anchor: none;
+}*/
+#serveroutputanchor {
+  height: 1px;
+  /*overflow-anchor: auto;*/
 }
 </style>
