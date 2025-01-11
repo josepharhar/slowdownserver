@@ -49,6 +49,93 @@ function getUsernameAndPassword(authHeader) {
   return {username, password};
 }
 
+async function handleIndex(req, res) {
+  const contents = await fs.readFile('index.html');
+  res.writeHead(200, {
+    'content-type': 'text/html'
+  });
+  res.end(contents);
+}
+
+async function handleIcon(req, res) {
+  res.writeHead(200, {
+    'content-type': 'image/png'
+  });
+  res.end(await fs.readFile('icon.png'));
+}
+
+async function handleDownload(req, res, url, websocket) {
+  const downloadUrl = url.searchParams.get('url');
+  const speed = url.searchParams.get('speed');
+  const filetype = url.searchParams.get('filetype');
+  log('downloading url: ' + downloadUrl);
+  const ytArgs = filetype == 'mp3'
+    ? ['--force-overwrites', '-o', 'asdf', '-x', '--audio-format', filetype, downloadUrl]
+    : ['--force-overwrites', '-o', `asdf.${filetype}`, '-f', filetype, downloadUrl];
+  const ytProc = spawn('yt-dlp', ytArgs);
+  ytProc.stdout.setEncoding('utf8');
+  ytProc.stdout.on('data', data => {
+    const str = data.toString();
+    if (websocket) {
+      websocket.sendUTF(str);
+    }
+  });
+  ytProc.stderr.setEncoding('utf8');
+  ytProc.stderr.on('data', data => {
+    const str = data.toString();
+    if (websocket) {
+      websocket.sendUTF(str);
+    }
+  });
+  await new Promise(resolve => {
+    ytProc.on('close', function (code) {
+      resolve();
+    });
+  });
+
+  let filename = `asdf.${filetype}`;
+
+  if (speed != 1) {
+    // TODO don't guess sample rate
+    const sampleRate = 44100;
+    const newSampleRate = Math.ceil(speed*sampleRate);
+    log('running ffmpeg');
+    // TODO make these args also work if theres a video track
+    const ptsScale = 1 / speed;
+    const ffArgs = filetype == 'mp3'
+      ? ['-y', '-i', filename, '-af', `asetrate=${newSampleRate},aresample=${sampleRate}`, `asdf-speed.${filetype}`]
+      : ['-y', '-i', filename, '-vf', `setpts=${ptsScale}*PTS`, '-af', `asetrate=${newSampleRate},aresample=${sampleRate}`, `asdf-speed.${filetype}`];
+    const ffProc = spawn('ffmpeg', ffArgs);
+    ffProc.stdout.setEncoding('utf8');
+    ffProc.stdout.on('data', function (data) {
+      const str = data.toString();
+      if (websocket) {
+        websocket.sendUTF(str);
+      }
+    });
+    ffProc.stderr.setEncoding('utf8');
+    ffProc.stderr.on('data', function (data) {
+      const str = data.toString();
+      if (websocket) {
+        websocket.sendUTF(str);
+      }
+    });
+    await new Promise(resolve => {
+      ffProc.on('close', function (code) {
+        resolve();
+      });
+    });
+    filename = `asdf-speed.${filetype}`;
+  }
+
+  const contents = await fs.readFile(filename);
+  res.writeHead(200, {
+    'content-type': 'audio/mpeg',
+    'content-disposition': `filename=${filename}`
+  });
+  res.end(contents);
+}
+
 const server = http.createServer(async (req, res) => {
   log(`${req.method} ${req.url}`);
   try {
@@ -71,90 +158,13 @@ const server = http.createServer(async (req, res) => {
 
     const url = new URL(`http://${process.env.HOST ?? 'localhost'}${req.url}`); 
     if (url.pathname == '/slowmedown') {
-      try {
-        const contents = await fs.readFile('index.html');
-        res.writeHead(200, {
-          'content-type': 'text/html'
-        });
-        res.end(contents);
-        return;
-      } catch (e) {
-        res.writeHead(500, {
-          'content-type': 'text/plain'
-        });
-        res.end('error:\n' + e);
-        return;
-      }
+      await handleIndex(req, res);
+      return;
+    } else if (url.pathname == '/icon.png') {
+      await handleIcon(req, res);
+      return;
     } else if (url.pathname == '/slowmedownload') {
-      const downloadUrl = url.searchParams.get('url');
-      const speed = url.searchParams.get('speed');
-      const filetype = url.searchParams.get('filetype');
-      log('downloading url: ' + downloadUrl);
-      const ytArgs = filetype == 'mp3'
-        ? ['--force-overwrites', '-o', 'asdf', '-x', '--audio-format', filetype, downloadUrl]
-        : ['--force-overwrites', '-o', `asdf.${filetype}`, '-f', filetype, downloadUrl];
-      const ytProc = spawn('yt-dlp', ytArgs);
-      ytProc.stdout.setEncoding('utf8');
-      ytProc.stdout.on('data', data => {
-        const str = data.toString();
-        if (websocket) {
-          websocket.sendUTF(str);
-        }
-      });
-      ytProc.stderr.setEncoding('utf8');
-      ytProc.stderr.on('data', data => {
-        const str = data.toString();
-        if (websocket) {
-          websocket.sendUTF(str);
-        }
-      });
-      await new Promise(resolve => {
-        ytProc.on('close', function (code) {
-          resolve();
-        });
-      });
-
-      let filename = `asdf.${filetype}`;
-
-      if (speed != 1) {
-        // TODO don't guess sample rate
-        const sampleRate = 44100;
-        const newSampleRate = Math.ceil(speed*sampleRate);
-        log('running ffmpeg');
-        // TODO make these args also work if theres a video track
-        const ptsScale = 1 / speed;
-        const ffArgs = filetype == 'mp3'
-          ? ['-y', '-i', filename, '-af', `asetrate=${newSampleRate},aresample=${sampleRate}`, `asdf-speed.${filetype}`]
-          : ['-y', '-i', filename, '-vf', `setpts=${ptsScale}*PTS`, '-af', `asetrate=${newSampleRate},aresample=${sampleRate}`, `asdf-speed.${filetype}`];
-        const ffProc = spawn('ffmpeg', ffArgs);
-        ffProc.stdout.setEncoding('utf8');
-        ffProc.stdout.on('data', function (data) {
-          const str = data.toString();
-          if (websocket) {
-            websocket.sendUTF(str);
-          }
-        });
-        ffProc.stderr.setEncoding('utf8');
-        ffProc.stderr.on('data', function (data) {
-          const str = data.toString();
-          if (websocket) {
-            websocket.sendUTF(str);
-          }
-        });
-        await new Promise(resolve => {
-          ffProc.on('close', function (code) {
-            resolve();
-          });
-        });
-        filename = `asdf-speed.${filetype}`;
-      }
-
-      const contents = await fs.readFile(filename);
-      res.writeHead(200, {
-        'content-type': 'audio/mpeg',
-        'content-disposition': `filename=${filename}`
-      });
-      res.end(contents);
+      await handleDownload(req, res, url, websocket);
       return;
     }
   } catch (e) {
