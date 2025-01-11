@@ -100,7 +100,6 @@ const server = http.createServer(async (req, res) => {
         if (websocket) {
           websocket.sendUTF(str);
         }
-        const lines = str.split(/(\r?\n)/g);
       });
       ytProc.stderr.setEncoding('utf8');
       ytProc.stderr.on('data', data => {
@@ -108,7 +107,6 @@ const server = http.createServer(async (req, res) => {
         if (websocket) {
           websocket.sendUTF(str);
         }
-        const lines = str.split(/(\r?\n)/g);
       });
       await new Promise(resolve => {
         ytProc.on('close', function (code) {
@@ -135,7 +133,6 @@ const server = http.createServer(async (req, res) => {
           if (websocket) {
             websocket.sendUTF(str);
           }
-          const lines = str.split(/(\r?\n)/g);
         });
         ffProc.stderr.setEncoding('utf8');
         ffProc.stderr.on('data', function (data) {
@@ -143,7 +140,6 @@ const server = http.createServer(async (req, res) => {
           if (websocket) {
             websocket.sendUTF(str);
           }
-          const lines = str.split(/(\r?\n)/g);
         });
         await new Promise(resolve => {
           ffProc.on('close', function (code) {
@@ -180,13 +176,14 @@ websocketRouter.attachServer(websocketServer);
 let nextWebsocketId = 1;
 
 websocketRouter.mount('/slowmedownsocket', null, async request => {
-  const {username, password} = getUsernameAndPassword(request.httpRequest.headers.authorization);
+  // https://bugs.webkit.org/show_bug.cgi?id=80362
+  /*const {username, password} = getUsernameAndPassword(request.httpRequest.headers.authorization);
   log('websocket username: ' + username + ', password: ' + password);
   if (username != await secretPromise) {
     log('websocket bad secret, rejecting');
     request.reject();
     return;
-  }
+  }*/
 
   const websocket = request.accept();
   const websocketId = nextWebsocketId++;
