@@ -7,31 +7,61 @@ const WebsocketServer = WebsocketLib.server;
 const WebsocketRouter = WebsocketLib.router;
 const spawn = child_process.spawn;
 
-// TODO add log file
-// TODO add websocket for frontend to see subprocess output
+const bufferedLogs = [];
+let writingToLogFile = false;
+async function flushToLogFile() {
+  if (writingToLogFile) {
+    console.error('flushToLogFile called while already flushing!');
+    process.exit(1);
+    return;
+  }
+  writingToLogFile = true;
+  const logFile = await fs.open('server.log', 'a');
+  while (bufferedLogs.length) {
+    const string = bufferedLogs.shift();
+    logFile.write(string + '\n');
+  }
+  await logFile.close();
+  writingToLogFile = false;
+}
+function log(string) {
+  console.log(string);
+  bufferedLogs.push(string);
+  if (!writingToLogFile) {
+    flushToLogFile();
+  }
+}
+
+const secretPromise = new Promise(async resolve => {
+  const file = await fs.readFile('secret', {encoding: 'utf-8'});
+  resolve(file.trim());
+});
+
 const websocketMap = new Map();
 
+function getUsernameAndPassword(authHeader) {
+  const header = authHeader || '';       // get the auth header
+  const token = header.split(/\s+/).pop() || '';        // and the encoded auth token
+  const auth = Buffer.from(token, 'base64').toString(); // convert from base64
+  const parts = auth.split(/:/);                        // split on colon
+  const username = parts.shift();                       // username is first
+  const password = parts.join(':');                     // everything else is the password
+  return {username, password};
+}
+
 const server = http.createServer(async (req, res) => {
-  console.log(`${req.method} ${req.url}`);
+  log(`${req.method} ${req.url}`);
   try {
     const websocketHeader = req.headers['x-websocket-id'];
     const websocket = websocketMap.get(String(websocketHeader));
-    console.log('websocketHeader: ' + websocketHeader + ', websocket: ' + websocket);
+    log('websocketHeader: ' + websocketHeader + ', websocket: ' + websocket);
 
-    const header = req.headers.authorization || '';       // get the auth header
-    const token = header.split(/\s+/).pop() || '';        // and the encoded auth token
-    const auth = Buffer.from(token, 'base64').toString(); // convert from base64
-    const parts = auth.split(/:/);                        // split on colon
-    const username = parts.shift();                       // username is first
-    const password = parts.join(':');                     // everything else is the password
-
-    const secret = (await fs.readFile('secret', {encoding: 'utf-8'})).trim();
-    console.log('username: ' + username);
-    console.log('password: ' + password);
-    console.log('secret: ' + secret);
+    const secret = await secretPromise;
+    const {username, password} = getUsernameAndPassword(req.headers.authorization);
+    log('username: ' + username + ', password: ' + password);
 
     if (username != secret) {
-      console.log('rejecting, bad password');
+      log('rejecting, bad password');
       res.writeHead(401, {
         'www-authenticate': 'Basic realm="Dev", charset="UTF-8"'
       });
@@ -59,8 +89,7 @@ const server = http.createServer(async (req, res) => {
       const downloadUrl = url.searchParams.get('url');
       const speed = url.searchParams.get('speed');
       const filetype = url.searchParams.get('filetype');
-      console.log('downloading url: ' + downloadUrl);
-      console.log('running yt-dlp...');
+      log('downloading url: ' + downloadUrl);
       const ytArgs = filetype == 'mp3'
         ? ['--force-overwrites', '-o', 'asdf', '-x', '--audio-format', filetype, downloadUrl]
         : ['--force-overwrites', '-o', `asdf.${filetype}`, '-f', filetype, downloadUrl];
@@ -72,7 +101,6 @@ const server = http.createServer(async (req, res) => {
           websocket.sendUTF(str);
         }
         const lines = str.split(/(\r?\n)/g);
-        console.log(lines.join(""));
       });
       ytProc.stderr.setEncoding('utf8');
       ytProc.stderr.on('data', data => {
@@ -81,26 +109,22 @@ const server = http.createServer(async (req, res) => {
           websocket.sendUTF(str);
         }
         const lines = str.split(/(\r?\n)/g);
-        console.log(lines.join(""));
       });
       await new Promise(resolve => {
         ytProc.on('close', function (code) {
-          console.log('process exit code ' + code);
           resolve();
         });
       });
 
       let filename = `asdf.${filetype}`;
 
-      console.log('speed: ' + speed);
       if (speed != 1) {
         // TODO don't guess sample rate
         const sampleRate = 44100;
         const newSampleRate = Math.ceil(speed*sampleRate);
-        console.log('running ffmpeg');
+        log('running ffmpeg');
         // TODO make these args also work if theres a video track
         const ptsScale = 1 / speed;
-        console.log(ptsScale);
         const ffArgs = filetype == 'mp3'
           ? ['-y', '-i', filename, '-af', `asetrate=${newSampleRate},aresample=${sampleRate}`, `asdf-speed.${filetype}`]
           : ['-y', '-i', filename, '-vf', `setpts=${ptsScale}*PTS`, '-af', `asetrate=${newSampleRate},aresample=${sampleRate}`, `asdf-speed.${filetype}`];
@@ -112,7 +136,6 @@ const server = http.createServer(async (req, res) => {
             websocket.sendUTF(str);
           }
           const lines = str.split(/(\r?\n)/g);
-          console.log(lines.join(""));
         });
         ffProc.stderr.setEncoding('utf8');
         ffProc.stderr.on('data', function (data) {
@@ -121,18 +144,15 @@ const server = http.createServer(async (req, res) => {
             websocket.sendUTF(str);
           }
           const lines = str.split(/(\r?\n)/g);
-          console.log(lines.join(""));
         });
         await new Promise(resolve => {
           ffProc.on('close', function (code) {
-            console.log('process exit code ' + code);
             resolve();
           });
         });
         filename = `asdf-speed.${filetype}`;
       }
 
-      console.log('going to reply with ' + filename);
       const contents = await fs.readFile(filename);
       res.writeHead(200, {
         'content-type': 'audio/mpeg',
@@ -142,7 +162,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
   } catch (e) {
-    console.log('error: ' + e.toString());
+    log('error: ' + e.toString());
     res.writeHead(500, {'content-type': 'text/plain'});
     res.end('error: ' + e.toString());
     return;
@@ -159,14 +179,21 @@ websocketRouter.attachServer(websocketServer);
 
 let nextWebsocketId = 1;
 
-websocketRouter.mount('/slowmedownsocket', null, request => {
-  // TODO check password and request.reject() if its not good?
+websocketRouter.mount('/slowmedownsocket', null, async request => {
+  const {username, password} = getUsernameAndPassword(request.httpRequest.headers.authorization);
+  log('websocket username: ' + username + ', password: ' + password);
+  if (username != await secretPromise) {
+    log('websocket bad secret, rejecting');
+    request.reject();
+    return;
+  }
+
   const websocket = request.accept();
   const websocketId = nextWebsocketId++;
-  console.log('created websocket with id: ' + websocketId);
+  log('created websocket with id: ' + websocketId);
   websocketMap.set(String(websocketId), websocket);
   websocket.on('close', (reasonCode, description) => {
-    console.log('closed websocket with id: ' + websocketId
+    log('closed websocket with id: ' + websocketId
       + ', reasonCode: ' + reasonCode
       + ', description: ' + description);
     websocketMap.delete(websocketId);

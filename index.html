@@ -23,6 +23,7 @@ websocket.addEventListener('message', event => {
     console.log('assigning websocketId of ' + event.data, event);
     websocketId = event.data;
   } else {
+    const text = String(event.data).replace('\r\n', '\n').replace('\r', '\n');
     document.getElementById('serveroutput').appendChild(new Text(event.data));
   }
 });
