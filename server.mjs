@@ -7,6 +7,27 @@ const WebsocketServer = WebsocketLib.server;
 const WebsocketRouter = WebsocketLib.router;
 const spawn = child_process.spawn;
 
+async function respondWithFile(res, filename) {
+  const fd = await fs.open(filename, 'r');
+  const fileStat = await fd.stat(filename);
+  const headers = {};
+  headers['content-length'] = fileStat.size;
+  if (filename.endsWith('.mp3')) {
+    headers['content-type'] = 'audio/mpeg';
+    headers['content-disposition'] = filename;
+  } else if (filename.endsWith('.mp4')) {
+    headers['content-type'] = 'video/mp4';
+    headers['content-disposition'] = filename;
+  } else if (filename.endsWith('.png')) {
+    headers['content-type'] = 'image/png';
+  } else if (filename.endsWith('.html')) {
+    headers['content-type'] = 'text/html';
+  }
+  const readStream = fd.createReadStream();
+  res.writeHead(200, headers);
+  readStream.pipe(res);
+}
+
 const bufferedLogs = [];
 let writingToLogFile = false;
 async function flushToLogFile() {
@@ -47,21 +68,6 @@ function getUsernameAndPassword(authHeader) {
   const username = parts.shift();                       // username is first
   const password = parts.join(':');                     // everything else is the password
   return {username, password};
-}
-
-async function handleIndex(req, res) {
-  const contents = await fs.readFile('index.html');
-  res.writeHead(200, {
-    'content-type': 'text/html'
-  });
-  res.end(contents);
-}
-
-async function handleIcon(req, res) {
-  res.writeHead(200, {
-    'content-type': 'image/png'
-  });
-  res.end(await fs.readFile('icon.png'));
 }
 
 async function handleDownload(req, res, url, websocket) {
@@ -128,12 +134,7 @@ async function handleDownload(req, res, url, websocket) {
     filename = `asdf-speed.${filetype}`;
   }
 
-  const contents = await fs.readFile(filename);
-  res.writeHead(200, {
-    'content-type': 'audio/mpeg',
-    'content-disposition': `filename=${filename}`
-  });
-  res.end(contents);
+  await respondWithFile(res, filename);
 }
 
 const server = http.createServer(async (req, res) => {
@@ -158,10 +159,10 @@ const server = http.createServer(async (req, res) => {
 
     const url = new URL(`http://${process.env.HOST ?? 'localhost'}${req.url}`); 
     if (url.pathname == '/slowmedown') {
-      await handleIndex(req, res);
+      await respondWithFile(res, 'index.html');
       return;
     } else if (url.pathname == '/icon.png') {
-      await handleIcon(req, res);
+      await respondWithFile(res, 'icon.png');
       return;
     } else if (url.pathname == '/slowmedownload') {
       await handleDownload(req, res, url, websocket);

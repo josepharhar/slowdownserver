@@ -1,6 +1,7 @@
 <!DOCTYPE atml>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel=icon href="icon.png" sizes="160x160" type="image/png">
+<title>slodown</title>
 
 <form>
   <div class=input>
@@ -18,7 +19,11 @@
       <option>mp4</option>
     </select>
   </div>
-  <button>download</button>
+  <button>Download</button>
+  <div>
+    <label for=progress>Progress</label>
+    <progress id=progress value=0></progress>
+  </div>
 </form>
 
 <div id=serveroutput><div id=serveroutputcontent></div><div id=serveroutputanchor></div></div>
@@ -42,8 +47,14 @@ websocket.addEventListener('message', event => {
 });
 
 const form = document.querySelector('form');
+const progress = document.querySelector('progress');
+
 form.addEventListener('submit', async event => {
   event.preventDefault();
+  form.disabled = true;
+
+  progress.removeAttribute('value');
+
   const url = document.getElementById('url').value;
   const speed = document.getElementById('speed').value;
   const filetype = document.getElementById('filetype').value;
@@ -53,13 +64,34 @@ form.addEventListener('submit', async event => {
       'x-websocket-id': websocketId
     }
   };
+
   const response = await fetch(
     '/slowmedownload?' + new URLSearchParams({url, speed, filetype}).toString(), options);
-  const blob = await response.blob();
+  const contentLength = response.headers.get('content-length');
+  const total = parseInt(contentLength, 10);
+  const values = [];
+  let loaded = 0;
+  progress.max = 100;
+  progress.min = 0;
+  progress.value = 0;
+
+  const reader = response.body.getReader();
+  while (true) {
+    const {done, value} = await reader.read();
+    if (done) {
+      break;
+    }
+    values.push(value);
+    loaded += value.byteLength;
+    const progressPercent = Math.round(loaded / total * 100);
+    progress.value = progressPercent;
+  }
+
+  const blob = new Blob(values);
   const file = window.URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = file;
-  a.download = 'asdf';
+  a.download = 'asdf.' + filetype;
   document.body.appendChild(a);
   a.click();
   a.remove();
