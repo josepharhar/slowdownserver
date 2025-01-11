@@ -198,4 +198,6 @@ websocketRouter.mount('/slowmedownsocket', null, async request => {
   websocket.sendUTF(websocketId);
 });
 
-server.listen(process.env.PORT || 48880);
+const port = process.env.PORT || 48880;
+server.listen(port);
+log('listening on port ' + port);

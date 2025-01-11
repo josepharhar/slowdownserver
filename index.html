@@ -1,18 +1,26 @@
 <!DOCTYPE atml>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🆖</text></svg>">
-<label for=url>url:</label>
-<input type=text id=url name=url>
-<br>
-<label for=speed>speed:</label>
-<input type=number id=speed name=speed value=1.0 step=0.1>
-<br>
-<label for=filetype>file type:</label>
-<select id=filetype name=filetype>
-  <option>mp3</option>
-  <option>mp4</option>
-</select>
-<br>
-<button>download</button>
+
+<form>
+  <div class=input>
+    <label for=url>url:</label>
+    <input required type=text id=url name=url>
+  </div>
+  <div class=input>
+    <label for=speed>speed:</label>
+    <input type=number id=speed name=speed value=1.0 step=0.1>
+  </div>
+  <div class=input>
+    <label for=filetype>file type:</label>
+    <select id=filetype name=filetype>
+      <option>mp3</option>
+      <option>mp4</option>
+    </select>
+  </div>
+  <button>download</button>
+</form>
+
 <div id=serveroutput><div id=serveroutputcontent></div><div id=serveroutputanchor></div></div>
 
 <script>
@@ -23,8 +31,8 @@ websocket.addEventListener('message', event => {
     console.log('assigning websocketId of ' + event.data, event);
     websocketId = event.data;
   } else {
-    //const text = String(event.data).replace('\r\n', '\n').replace('\r', '\n');
     let text = String(event.data);
+    text = text.replace('\r\n', '\n').replace('\r', '\n');
     if (!text.endsWith('\n')) {
       text += '\n';
     }
@@ -33,8 +41,9 @@ websocket.addEventListener('message', event => {
   }
 });
 
-const button = document.querySelector('button');
-button.onclick = async () => {
+const form = document.querySelector('form');
+form.addEventListener('submit', async event => {
+  event.preventDefault();
   const url = document.getElementById('url').value;
   const speed = document.getElementById('speed').value;
   const filetype = document.getElementById('filetype').value;
@@ -54,12 +63,12 @@ button.onclick = async () => {
   document.body.appendChild(a);
   a.click();
   a.remove();
-};
+});
 </script>
 
 <style>
 #serveroutput {
-  height: 200px;
+  height: 300px;
   overflow-y: scroll;
   white-space: pre;
   font-family: monospace;
@@ -71,5 +80,22 @@ button.onclick = async () => {
 #serveroutputanchor {
   height: 1px;
   /*overflow-anchor: auto;*/
+}
+
+.input > label, .input > input, .input > select {
+  display: block;
+}
+form > * {
+  margin-bottom: 0.8em;
+}
+form {
+  margin-block-end: 0;
+}
+form, form button, form input, form select {
+  font-size: 20px;
+  font-family: sans-serif;
+}
+input#url {
+  width: 100%;
 }
 </style>
