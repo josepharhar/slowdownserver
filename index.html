@@ -4,26 +4,28 @@
 <title>slodown</title>
 
 <form>
-  <div class=input>
-    <label for=url>URL</label>
-    <input required type=text id=url name=url>
-  </div>
-  <div class=input>
-    <label for=speed>Speed multiplier</label>
-    <input type=number id=speed name=speed value=1.0 step=0.01>
-  </div>
-  <div class=input>
-    <label for=filetype>File type</label>
-    <select id=filetype name=filetype>
-      <option>mp3</option>
-      <option>mp4</option>
-    </select>
-  </div>
-  <button>Download</button>
-  <div>
-    <label for=progress>Progress</label>
-    <progress id=progress value=0></progress>
-  </div>
+  <fieldset>
+    <div class=input>
+      <label for=url>URL</label>
+      <input required type=text id=url name=url>
+    </div>
+    <div class=input>
+      <label for=speed>Speed multiplier</label>
+      <input type=number id=speed name=speed value=1.0 step=0.01>
+    </div>
+    <div class=input>
+      <label for=filetype>File type</label>
+      <select id=filetype name=filetype>
+        <option>mp3</option>
+        <option>mp4</option>
+      </select>
+    </div>
+    <button>Download</button>
+    <div>
+      <label for=progress>Progress</label>
+      <progress id=progress value=0></progress>
+    </div>
+  </fieldset>
 </form>
 
 <div id=serveroutput><div id=serveroutputcontent></div><div id=serveroutputanchor></div></div>
@@ -48,7 +50,7 @@ const progress = document.querySelector('progress');
 
 form.addEventListener('submit', async event => {
   event.preventDefault();
-  form.disabled = true;
+  document.querySelector('fieldset').disabled = true;
 
   progress.removeAttribute('value');
 
@@ -119,7 +121,13 @@ body {
 .input > label, .input > input, .input > select {
   display: block;
 }
-form > * {
+fieldset {
+  border: none;
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+}
+fieldset > * {
   margin-bottom: 0.8em;
 }
 form {
