@@ -38,10 +38,7 @@ websocket.addEventListener('message', event => {
   } else {
     let text = String(event.data);
     text = text.replace('\r\n', '\n').replace('\r', '\n');
-    if (!text.endsWith('\n')) {
-      text += '\n';
-    }
-    document.getElementById('serveroutputcontent').appendChild(new Text(event.data));
+    document.getElementById('serveroutputcontent').appendChild(new Text(text));
     document.getElementById('serveroutputanchor').scrollIntoView();
   }
 });
