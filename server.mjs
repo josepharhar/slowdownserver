@@ -78,26 +78,30 @@ async function handleDownload(req, res, url, websocket) {
   const ytArgs = filetype == 'mp3'
     ? ['--force-overwrites', '-o', 'asdf', '-x', '--audio-format', filetype, downloadUrl]
     : ['--force-overwrites', '-o', `asdf.${filetype}`, '-f', filetype, downloadUrl];
-  const ytProc = spawn('yt-dlp', ytArgs);
-  ytProc.stdout.setEncoding('utf8');
-  ytProc.stdout.on('data', data => {
-    const str = data.toString();
-    if (websocket) {
-      websocket.sendUTF(str);
-    }
-  });
-  ytProc.stderr.setEncoding('utf8');
-  ytProc.stderr.on('data', data => {
-    const str = data.toString();
-    if (websocket) {
-      websocket.sendUTF(str);
-    }
-  });
-  await new Promise(resolve => {
-    ytProc.on('close', function (code) {
-      resolve();
+  try {
+    const ytProc = spawn('yt-dlp', ytArgs);
+    ytProc.stdout.setEncoding('utf8');
+    ytProc.stdout.on('data', data => {
+      const str = data.toString();
+      if (websocket) {
+        websocket.sendUTF(str);
+      }
     });
-  });
+    ytProc.stderr.setEncoding('utf8');
+    ytProc.stderr.on('data', data => {
+      const str = data.toString();
+      if (websocket) {
+        websocket.sendUTF(str);
+      }
+    });
+    await new Promise(resolve => {
+      ytProc.on('close', function (code) {
+        resolve();
+      });
+    });
+  } catch (error) {
+    console.error('proc error: ' + error);
+  }
 
   let filename = `asdf.${filetype}`;
 
@@ -174,6 +178,8 @@ const server = http.createServer(async (req, res) => {
     res.end('error: ' + e.toString());
     return;
   }
+  res.writeHead(200, {'content-type': 'text/plain'});
+  res.end('wrong path');
 });
 
 const websocketServer = new WebsocketServer({
