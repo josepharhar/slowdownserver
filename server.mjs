@@ -36,30 +36,33 @@ async function respondWithFile(res, filename, customDisplayName = null, cleanup 
     headers['content-length'] = fileStat.size;
 
     const downloadName = customDisplayName || path.basename(filename);
-    // Sanitize filename for Content-Disposition header
     const encodedName = encodeURIComponent(downloadName);
 
     if (filename.endsWith('.mp3')) {
       headers['content-type'] = 'audio/mpeg';
       headers['content-disposition'] = `attachment; filename="${encodedName}"; filename*=UTF-8''${encodedName}`;
-      headers['access-control-expose-headers'] = 'content-disposition';
     } else if (filename.endsWith('.mp4')) {
       headers['content-type'] = 'video/mp4';
       headers['content-disposition'] = `attachment; filename="${encodedName}"; filename*=UTF-8''${encodedName}`;
-      headers['access-control-expose-headers'] = 'content-disposition';
     } else if (filename.endsWith('.png')) {
       headers['content-type'] = 'image/png';
     } else if (filename.endsWith('.html')) {
       headers['content-type'] = 'text/html';
     }
 
+    headers['access-control-expose-headers'] = 'content-disposition';
+
     const readStream = fd.createReadStream();
     res.writeHead(200, headers);
     readStream.pipe(res);
 
     if (cleanup) {
-      // Delete local files once the response finishes streaming or errors out
+      let isCleanedUp = false; // Flag to prevent duplicate unlinks
+
       const deleteFile = async () => {
+        if (isCleanedUp) return;
+        isCleanedUp = true;
+
         try {
           await fs.unlink(filename);
           log(`Cleaned up file: ${filename}`);
