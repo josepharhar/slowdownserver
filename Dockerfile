@@ -1,11 +1,11 @@
 FROM node:20-alpine
 
-RUN apk add --no-network --no-cache \
+RUN apk add --no-cache \
     python3 \
     ffmpeg \
     yt-dlp
 
-ENV PORT=5000
+ENV PORT=48878
 WORKDIR /app
 
 # Copy dependency definitions and install fresh packages for Alpine
