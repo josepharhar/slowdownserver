@@ -1,4 +1,4 @@
-<!DOCTYPE atml>
+<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel=icon href="icon.png" sizes="160x160" type="image/png">
 <title>slodown</title>
@@ -16,11 +16,14 @@
     <div class=input>
       <label for=filetype>File type</label>
       <select id=filetype name=filetype>
-        <option>mp3</option>
         <option>mp4</option>
+        <option>mp3</option>
       </select>
     </div>
-    <button>Download</button>
+    <div class=button-group>
+      <button type="submit" id="downloadBtn">Download</button>
+      <button type="button" id="updateBtn">Update yt-dlp</button>
+    </div>
     <div>
       <label for=progress>Progress</label>
       <progress id=progress value=0></progress>
@@ -47,10 +50,51 @@ websocket.addEventListener('message', event => {
 
 const form = document.querySelector('form');
 const progress = document.querySelector('progress');
+const updateBtn = document.getElementById('updateBtn');
 
+// Helper function to extract filename from Content-Disposition header
+function getFilenameFromHeader(header, fallbackExtension) {
+  if (!header) return `download.${fallbackExtension}`;
+  
+  // Try matching UTF-8 filename pattern: filename*=UTF-8''...
+  const utf8Match = header.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match && utf8Match[1]) {
+    return decodeURIComponent(utf8Match[1]);
+  }
+  
+  // Standard fallback: filename="..."
+  const match = header.match(/filename="?([^";]+)"?/i);
+  if (match && match[1]) {
+    return decodeURIComponent(match[1]);
+  }
+  
+  return `download.${fallbackExtension}`;
+}
+
+// Handler for Updating yt-dlp
+updateBtn.addEventListener('click', async () => {
+  const fieldset = document.querySelector('fieldset');
+  fieldset.disabled = true;
+  
+  try {
+    const options = {
+      headers: {
+        'x-websocket-id': websocketId
+      }
+    };
+    await fetch('/update-ytdlp', options);
+  } catch (err) {
+    console.error('Update failed:', err);
+  } finally {
+    fieldset.disabled = false;
+  }
+});
+
+// Handler for Downloading
 form.addEventListener('submit', async event => {
   event.preventDefault();
-  document.querySelector('fieldset').disabled = true;
+  const fieldset = document.querySelector('fieldset');
+  fieldset.disabled = true;
 
   progress.removeAttribute('value');
 
@@ -64,36 +108,47 @@ form.addEventListener('submit', async event => {
     }
   };
 
-  const response = await fetch(
-    '/slowmedownload?' + new URLSearchParams({url, speed, filetype}).toString(), options);
-  const contentLength = response.headers.get('content-length');
-  const total = parseInt(contentLength, 10);
-  const values = [];
-  let loaded = 0;
-  progress.max = 100;
-  progress.min = 0;
-  progress.value = 0;
+  try {
+    const response = await fetch(
+      '/slowmedownload?' + new URLSearchParams({url, speed, filetype}).toString(), options);
+    
+    // Extract filename directly from Content-Disposition
+    const disposition = response.headers.get('content-disposition');
+    const filename = getFilenameFromHeader(disposition, filetype);
 
-  const reader = response.body.getReader();
-  while (true) {
-    const {done, value} = await reader.read();
-    if (done) {
-      break;
+    const contentLength = response.headers.get('content-length');
+    const total = parseInt(contentLength, 10);
+    const values = [];
+    let loaded = 0;
+    progress.max = 100;
+    progress.min = 0;
+    progress.value = 0;
+
+    const reader = response.body.getReader();
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      values.push(value);
+      loaded += value.byteLength;
+      if (total) {
+        progress.value = Math.round((loaded / total) * 100);
+      }
     }
-    values.push(value);
-    loaded += value.byteLength;
-    const progressPercent = Math.round(loaded / total * 100);
-    progress.value = progressPercent;
-  }
 
-  const blob = new Blob(values);
-  const file = window.URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = file;
-  a.download = 'asdf.' + filetype;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
+    const blob = new Blob(values);
+    const fileUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = fileUrl;
+    a.download = filename; // Dynamic filename applied here
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(fileUrl);
+  } catch (err) {
+    console.error('Download error:', err);
+  } finally {
+    fieldset.disabled = false;
+  }
 });
 </script>
 
@@ -110,12 +165,9 @@ body {
   font-family: monospace;
   border: 1px solid white;
 }
-/*#serveroutputcontent {
-  overflow-anchor: none;
-}*/
+
 #serveroutputanchor {
   height: 1px;
-  /*overflow-anchor: auto;*/
 }
 
 .input > label, .input > input, .input > select {
@@ -139,5 +191,9 @@ form, form button, form input, form select {
 }
 input#url {
   width: 100%;
+}
+.button-group {
+  display: flex;
+  gap: 10px;
 }
 </style>
