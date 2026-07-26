@@ -1,18 +1,22 @@
 FROM node:20-alpine
 
+# Install system dependencies (including curl/ca-certificates)
 RUN apk add --no-cache \
     python3 \
     ffmpeg \
-    yt-dlp
+    curl \
+    ca-certificates
+
+# Install standalone yt-dlp binary with self-update support
+RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \
+    && chmod a+rx /usr/local/bin/yt-dlp
 
 ENV PORT=48878
 WORKDIR /app
 
-# Copy dependency definitions and install fresh packages for Alpine
 COPY package*.json ./
 RUN npm install --omit=dev
 
-# Copies icon.png, index.html, server.mjs (ignores secret/node_modules/server.log via .dockerignore)
 COPY . .
 
 EXPOSE ${PORT}

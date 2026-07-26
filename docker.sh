@@ -4,6 +4,8 @@ set -x
 
 docker build -t slodown-server .
 
+docker stop slodown || true && docker rm slodown || true
+
 docker run -d \
   --name slodown \
   --restart unless-stopped \
